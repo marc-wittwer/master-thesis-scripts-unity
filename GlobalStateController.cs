@@ -49,51 +49,12 @@ public class GlobalStateController : MonoBehaviour
         ros.RegisterPublisher<TaskUpdateMsg>("task_update");
         ros.RegisterPublisher<CollisionPlaneMsg>("collision_plane");
 
-        SetupTaskMarkers();
-
         collisionPlaneMaterial = Resources.Load("Materials/CollisionPlaneMaterial", typeof(Material)) as Material;
         workSpaceBoundsMaterial = Resources.Load("Materials/WorkSpaceBoundsMaterial", typeof(Material)) as Material;
 
-        pandaWorkSpace = GameObject.CreatePrimitive(PrimitiveType.Sphere);
-        pandaWorkSpace.name = "pandaWorkSpaceBounds";
-        pandaWorkSpace.transform.position = new Vector3(0.0f, 0.354f, 0.0f);
-        pandaWorkSpace.GetComponent<Renderer>().material = workSpaceBoundsMaterial;
-        pandaWorkSpace.GetComponent<SphereCollider>().enabled = false;
-        pandaWorkSpace.SetActive(false);
-        float radius = 1.66f;
-        pandaWorkSpace.transform.localScale = new Vector3(radius, radius, radius);
-
-        Debug.Log("WHY NOT SHOW ME?");
-        Debug.Log(panda2.name);
-
-        var robotFrameAnchorPointerHandler = robotFrameAnchor.GetComponent<PointerHandler>();
-        robotFrameAnchorPointerHandler.OnPointerClicked.AddListener((e) =>
-        {
-
-            // set position of robot frame to anchor
-
-            //transform.Find("panda2/base_footprint").GetComponent<ArticulationBody>().TeleportRoot(robotFrameAnchor.transform.position, robotFrameAnchor.transform.rotation);
-
-            float anchorHeight = 0.1f;
-            Vector3 robotFrameOrigin = new Vector3(robotFrameAnchor.transform.position.x, robotFrameAnchor.transform.position.y - anchorHeight, robotFrameAnchor.transform.position.z);
-            robotFrame.transform.SetPositionAndRotation(robotFrameOrigin, robotFrameAnchor.transform.rotation);
-
-            rootArticulationBody.GetComponent<ArticulationBody>().TeleportRoot(robotFrameOrigin, robotFrameAnchor.transform.rotation);
-
-            // get relative and absolute position of task markers
-            GameObject startMarker = GameObject.Find("Task Start Marker V5 (1)");
-            Debug.Log("localposition robotFrame" + startMarker.transform.localPosition);
-            Debug.Log("position robotFrame" + startMarker.transform.position);
-
-            Debug.Log(" taskStartMarker.transform.localPosition" + taskStartMarker.transform.localPosition);
-            Debug.Log(" taskStartMarker.transform.position" + taskStartMarker.transform.position);
-
-
-
-           
-
-        });
-
+        SetupTaskMarkers();
+        SetupRobotWorkspace();
+        SetupRobotFrameAnchor();
     }
 
     void Update()
@@ -138,6 +99,31 @@ public class GlobalStateController : MonoBehaviour
         });
     }
 
+    void SetupRobotFrameAnchor()
+    {
+        var robotFrameAnchorPointerHandler = robotFrameAnchor.GetComponent<PointerHandler>();
+        robotFrameAnchorPointerHandler.OnPointerClicked.AddListener((e) =>
+        {
+            float anchorHeight = 0.1f;
+            Vector3 robotFrameOrigin = new Vector3(robotFrameAnchor.transform.position.x, robotFrameAnchor.transform.position.y - anchorHeight, robotFrameAnchor.transform.position.z);
+            robotFrame.transform.SetPositionAndRotation(robotFrameOrigin, robotFrameAnchor.transform.rotation);
+            rootArticulationBody.GetComponent<ArticulationBody>().TeleportRoot(robotFrameOrigin, robotFrameAnchor.transform.rotation);
+        });
+    }
+
+    void SetupRobotWorkspace()
+    {
+        pandaWorkSpace = GameObject.CreatePrimitive(PrimitiveType.Sphere);
+        pandaWorkSpace.name = "pandaWorkSpaceBounds";
+        pandaWorkSpace.transform.position = new Vector3(0.0f, 0.354f, 0.0f);
+        pandaWorkSpace.transform.parent = robotFrame.transform;
+        pandaWorkSpace.GetComponent<Renderer>().material = workSpaceBoundsMaterial;
+        pandaWorkSpace.GetComponent<SphereCollider>().enabled = false;
+        pandaWorkSpace.SetActive(false);
+        float radius = 1.66f;
+        pandaWorkSpace.transform.localScale = new Vector3(radius, radius, radius);
+    }
+
     public void SetCollisionPlanesPoses()
     {
         foreach (CollisionPlane plane in globalPlanes)
@@ -154,8 +140,11 @@ public class GlobalStateController : MonoBehaviour
                 // Constrain orientation to be parallel to floor-plane
                 Quaternion quat = RosSharp.TransformExtensions.Ros2Unity(plane.pose.rotation);
                 quat.eulerAngles = new Vector3(0.0f, quat.eulerAngles.y, 0.0f);
+
                 planeObject.transform.SetPositionAndRotation(RosSharp.TransformExtensions.Ros2Unity(plane.pose.position), quat);
-                //planeObject.transform.SetPositionAndRotation(RosSharp.TransformExtensions.Ros2Unity(plane.pose.position), RosSharp.TransformExtensions.Ros2Unity(plane.pose.rotation));
+
+                planeObject.transform.localPosition = RosSharp.TransformExtensions.Ros2Unity(plane.pose.position);
+                planeObject.transform.localRotation = quat;
             }
             else
             {
@@ -173,13 +162,15 @@ public class GlobalStateController : MonoBehaviour
             if (GameObject.Find(item.name) != null)
             {
                 GameObject itemObject = GameObject.Find(item.name);
-                itemObject.transform.SetPositionAndRotation(RosSharp.TransformExtensions.Ros2Unity(item.pose.position), RosSharp.TransformExtensions.Ros2Unity(item.pose.rotation));
+                itemObject.transform.localPosition = RosSharp.TransformExtensions.Ros2Unity(item.pose.position);
+                itemObject.transform.localRotation = RosSharp.TransformExtensions.Ros2Unity(item.pose.rotation);
             }
             else
             {
                 GameObject cube = GameObject.CreatePrimitive(PrimitiveType.Cube);
                 cube.name = item.name;
                 cube.transform.SetPositionAndRotation(RosSharp.TransformExtensions.Ros2Unity(item.pose.position), RosSharp.TransformExtensions.Ros2Unity(item.pose.rotation));
+                cube.transform.parent = robotFrame.transform;
 
                 Vector3 scale = new Vector3((float)item.dimensions.x, (float)item.dimensions.y, (float)item.dimensions.z);
                 cube.transform.localScale = RosSharp.TransformExtensions.Ros2Unity(scale);
@@ -192,6 +183,7 @@ public class GlobalStateController : MonoBehaviour
         cube.name = plane.id;
         cube.transform.position = RosSharp.TransformExtensions.Ros2Unity(plane.pose.position);
         cube.transform.rotation = RosSharp.TransformExtensions.Ros2Unity(plane.pose.rotation);
+        cube.transform.parent = robotFrame.transform;
         Vector3 scale = new Vector3((float)plane.dimensions.x, (float)plane.dimensions.y, (float)plane.dimensions.z);
         cube.transform.localScale = RosSharp.TransformExtensions.Ros2Unity(scale);
 
@@ -241,8 +233,8 @@ public class GlobalStateController : MonoBehaviour
         msg.pose = new PoseStampedMsg();
 
         Transform transform = cube.transform;
-        Vector3 position = new Vector3((float)transform.position.x, (float)transform.position.y, (float)transform.position.z);
-        Quaternion quat = new Quaternion((float)transform.rotation.x, (float)transform.rotation.y, (float)transform.rotation.z, (float)transform.rotation.w);
+        Vector3 position = new Vector3((float)transform.localPosition.x, (float)transform.localPosition.y, (float)transform.localPosition.z);
+        Quaternion quat = new Quaternion((float)transform.localRotation.x, (float)transform.localRotation.y, (float)transform.localRotation.z, (float)transform.localRotation.w);
 
         msg.pose.pose.position.x = RosSharp.TransformExtensions.Unity2Ros(position).x;
         msg.pose.pose.position.y = RosSharp.TransformExtensions.Unity2Ros(position).y;
@@ -267,12 +259,13 @@ public class GlobalStateController : MonoBehaviour
         msg.pose_type = marker.name == "Task Start Marker" ? 0 : 1;
         msg.pose = new PoseMsg();
 
-        Vector3 position = new Vector3((float)marker.transform.position.x, (float)marker.transform.position.y, (float)marker.transform.position.z);
+        Vector3 position = new Vector3((float)marker.transform.localPosition.x, (float)marker.transform.localPosition.y, (float)marker.transform.localPosition.z);
+
         msg.pose.position.x = RosSharp.TransformExtensions.Unity2Ros(position).x;
         msg.pose.position.y = RosSharp.TransformExtensions.Unity2Ros(position).y;
         msg.pose.position.z = RosSharp.TransformExtensions.Unity2Ros(position).z;
 
-        Quaternion quat = new Quaternion((float)marker.transform.rotation.x, (float)marker.transform.rotation.y, (float)marker.transform.rotation.z, (float)marker.transform.rotation.w);
+        Quaternion quat = new Quaternion((float)marker.transform.localRotation.x, (float)marker.transform.localRotation.y, (float)marker.transform.localRotation.z, (float)marker.transform.localRotation.w);
         msg.pose.orientation.x = RosSharp.TransformExtensions.Unity2Ros(quat).x;
         msg.pose.orientation.y = RosSharp.TransformExtensions.Unity2Ros(quat).y;
         msg.pose.orientation.z = RosSharp.TransformExtensions.Unity2Ros(quat).z;
@@ -283,17 +276,13 @@ public class GlobalStateController : MonoBehaviour
 
     public void UpdateTaskMarkersAppearance()
     {
-        //float taskStartMarkerDistance = Math.Abs(Vector3.Distance(pandaWorkSpace.transform.position, taskStartMarker.transform.position));
-        //float taskEndMarkerDistance = Math.Abs(Vector3.Distance(pandaWorkSpace.transform.position, taskEndMarker.transform.position));
-
-        //float bounds = 0.75f;
         pandaWorkSpace.SetActive(!TaskMarkerPositionsAreValid());
     }
 
     bool TaskMarkerPositionsAreValid()
     {
-        float taskStartMarkerDistance = Math.Abs(Vector3.Distance(pandaWorkSpace.transform.position, taskStartMarker.transform.position));
-        float taskEndMarkerDistance = Math.Abs(Vector3.Distance(pandaWorkSpace.transform.position, taskEndMarker.transform.position));
+        float taskStartMarkerDistance = Math.Abs(Vector3.Distance(pandaWorkSpace.transform.localPosition, taskStartMarker.transform.localPosition));
+        float taskEndMarkerDistance = Math.Abs(Vector3.Distance(pandaWorkSpace.transform.localPosition, taskEndMarker.transform.localPosition));
 
         float bounds = 0.75f;
         return (taskStartMarkerDistance < bounds && taskEndMarkerDistance < bounds) ? true : false;
@@ -346,11 +335,13 @@ public class GlobalStateController : MonoBehaviour
  
         if (!isMovingStartMarker)
         {
-            taskStartMarker.transform.SetPositionAndRotation(RosSharp.TransformExtensions.Ros2Unity(startPosition), RosSharp.TransformExtensions.Ros2Unity(startRotation));
+            taskStartMarker.transform.localPosition = RosSharp.TransformExtensions.Ros2Unity(startPosition);
+            taskStartMarker.transform.localRotation = RosSharp.TransformExtensions.Ros2Unity(startRotation);
         }
         if (!isMovingEndMarker)
         {
-            taskEndMarker.transform.SetPositionAndRotation(RosSharp.TransformExtensions.Ros2Unity(endPosition), RosSharp.TransformExtensions.Ros2Unity(endRotation));
+            taskEndMarker.transform.localPosition = RosSharp.TransformExtensions.Ros2Unity(endPosition);
+            taskEndMarker.transform.localRotation = RosSharp.TransformExtensions.Ros2Unity(endRotation);
         }
     }
 
