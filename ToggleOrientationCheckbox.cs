@@ -23,33 +23,48 @@ public class ToggleOrientationCheckbox : MonoBehaviour
         ros = ROSConnection.GetOrCreateInstance();
         ROSConnection.GetOrCreateInstance().Subscribe<PlanningSceneMsg>("/global_planning_scene", PlanningSceneCallback);
         ros.RegisterPublisher<TaskUpdateMsg>("task_update");
+
+        Interactable checkbox = GameObject.Find("OrientationConstraintCheckbox").GetComponent<Interactable>();
+        checkbox.OnClick.AddListener(() =>
+        {
+            //Debug.Log("Clicked constraint checkbox");
+            TaskUpdateMsg msg = new TaskUpdateMsg();
+            msg.pose_type = 2;
+            msg.pose = new PoseMsg();
+            msg.fixed_orientation = !fixed_orientation;
+            fixed_orientation = !fixed_orientation;
+
+            checkbox.IsToggled = fixed_orientation;
+
+            ros.Publish("task_update", msg);
+
+            // TODO: Change the task_end_marker's rotation equal to the task_start_marker  
+        });
     }
 
     // Update is called once per frame
-    void Update()
-    {
+    //void Update()
+    //{
         
-    }
+    //}
 
-    public void ToggleCheckboxAndUpdateTaskMarkerInGlobalState()
-    {
-        Debug.Log("Hello");
-        TaskUpdateMsg msg = new TaskUpdateMsg();
-        msg.pose_type = 2;
-        msg.pose = new PoseMsg();
-        msg.fixed_orientation = !fixed_orientation;
-        fixed_orientation = !fixed_orientation;
+    //public void ToggleCheckboxAndUpdateTaskMarkerInGlobalState()
+    //{
+    //    Debug.Log("Hello");
+    //    TaskUpdateMsg msg = new TaskUpdateMsg();
+    //    msg.pose_type = 2;
+    //    msg.pose = new PoseMsg();
+    //    msg.fixed_orientation = !fixed_orientation;
+    //    fixed_orientation = !fixed_orientation;
 
-        ros.Publish("task_update", msg);
-    }
+
+
+    //    ros.Publish("task_update", msg);
+    //}
 
     public void PlanningSceneCallback(PlanningSceneMsg msg)
     {
-        Debug.Log("Received global planning scene");
         fixed_orientation = msg.fixed_orientation;
-        
-        // display checkbox status
-
     }
 
 }
